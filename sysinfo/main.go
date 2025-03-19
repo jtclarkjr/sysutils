@@ -25,9 +25,20 @@ func GetHostInfo() string {
 		log.Fatalf("Error retrieving kernel version: %v", err)
 	}
 
+	// Get OS version using `sw_vers -productVersion` (macOS specific)
+	osVersion := "Unknown"
+	if osName == "darwin" { // macOS
+		versionOutput, err := exec.Command("sw_vers", "-productVersion").Output()
+		if err != nil {
+			log.Printf("Error retrieving OS version: %v", err)
+		} else {
+			osVersion = strings.TrimSpace(string(versionOutput))
+		}
+	}
+
 	return fmt.Sprintf(
-		"Hostname: %s\nOS: %s\nKernel Version: %s\nArchitecture: %s\n",
-		hostname, osName, strings.TrimSpace(string(kernelVersion)), arch,
+		"Hostname: %s\nOS: %s\nOS Version: %s\nKernel Version: %s\nArchitecture: %s\n",
+		hostname, osName, osVersion, strings.TrimSpace(string(kernelVersion)), arch,
 	)
 }
 
