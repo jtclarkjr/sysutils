@@ -3,58 +3,75 @@ package sysinfo
 import (
 	"fmt"
 	"log"
-
-	"github.com/elastic/go-sysinfo"
-	"github.com/elastic/go-sysinfo/types"
+	"os"
+	"os/exec"
+	"runtime"
+	"strings"
 )
 
 // GetHostInfo retrieves basic host information.
 func GetHostInfo() string {
-	host, err := sysinfo.Host()
+	hostname, err := os.Hostname()
 	if err != nil {
-		log.Fatalf("Error retrieving host info: %v", err)
+		log.Fatalf("Error retrieving hostname: %v", err)
 	}
 
-	info := host.Info()
+	osName := runtime.GOOS
+	arch := runtime.GOARCH
+
+	// Get kernel version using `uname -r`
+	kernelVersion, err := exec.Command("uname", "-r").Output()
+	if err != nil {
+		log.Fatalf("Error retrieving kernel version: %v", err)
+	}
+
 	return fmt.Sprintf(
-		"Hostname: %s\nOS: %s %s (%s)\nKernel Version: %s\nArchitecture: %s\n",
-		info.Hostname, info.OS.Name, info.OS.Version, info.OS.Platform, info.KernelVersion, info.Architecture,
+		"Hostname: %s\nOS: %s\nKernel Version: %s\nArchitecture: %s\n",
+		hostname, osName, strings.TrimSpace(string(kernelVersion)), arch,
 	)
 }
 
 // GetCPUInfo retrieves CPU usage information.
 func GetCPUInfo() string {
-	host, err := sysinfo.Host()
+	// Use `top` or `ps` commands to retrieve CPU usage
+	cpuUsage, err := exec.Command("sh", "-c", "top -l 1 | grep 'CPU usage'").Output()
 	if err != nil {
-		log.Fatalf("Error retrieving host info: %v", err)
+		log.Fatalf("Error retrieving CPU info: %v", err)
 	}
 
-	if cpuTimer, ok := host.(types.CPUTimer); ok {
-		cpuInfo, err := cpuTimer.CPUTime()
-		if err != nil {
-			log.Fatalf("Error retrieving CPU info: %v", err)
-		}
-		return fmt.Sprintf(
-			"CPU User Time: %f seconds\nCPU System Time: %f seconds\nCPU Idle Time: %f seconds\n",
-			cpuInfo.User.Seconds(), cpuInfo.System.Seconds(), cpuInfo.Idle.Seconds(),
-		)
-	}
-	return "CPU information not available on this platform.\n"
+	return fmt.Sprintf("CPU Info: %s", strings.TrimSpace(string(cpuUsage)))
 }
 
 // GetMemoryInfo retrieves memory usage information.
 func GetMemoryInfo() string {
-	host, err := sysinfo.Host()
-	if err != nil {
-		log.Fatalf("Error retrieving host info: %v", err)
-	}
-
-	memInfo, err := host.Memory()
+	// Use `vm_stat` to retrieve memory information on macOS
+	memStats, err := exec.Command("vm_stat").Output()
 	if err != nil {
 		log.Fatalf("Error retrieving memory info: %v", err)
 	}
+
+	// Parse `vm_stat` output to calculate memory usage
+	lines := strings.Split(string(memStats), "\n")
+	pageSize := 4096 // macOS default page size in bytes
+	var totalPages, freePages int
+
+	for _, line := range lines {
+		if strings.Contains(line, "Pages free") {
+			fmt.Sscanf(line, "Pages free: %d.", &freePages)
+		}
+		if strings.Contains(line, "Pages active") || strings.Contains(line, "Pages inactive") || strings.Contains(line, "Pages speculative") || strings.Contains(line, "Pages wired down") {
+			var pages int
+			fmt.Sscanf(line, "%*s %*s %d.", &pages)
+			totalPages += pages
+		}
+	}
+
+	totalMemory := totalPages * pageSize
+	freeMemory := freePages * pageSize
+	usedMemory := totalMemory - freeMemory
+
 	return fmt.Sprintf(
 		"Total Memory: %d bytes\nFree Memory: %d bytes\nUsed Memory: %d bytes\n",
-		memInfo.Total, memInfo.Free, memInfo.Total-memInfo.Free,
+		totalMemory, freeMemory, usedMemory,
 	)
 }
