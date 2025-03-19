@@ -9,7 +9,7 @@ package main
 import (
     "fmt"
 
-    "github.com/yourusername/sysutils/sysinfo"
+    "github.com/jtclarkjr/sysutils/sysinfo"
 )
 
 func main() {
